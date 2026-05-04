@@ -1,0 +1,37 @@
+// =====================================================================
+// UI Parameters: Creación de un menú desplegable
+// =====================================================================
+// Sintaxis: DEFINE_UI_PARAMS(variable, Nombre UI, TIPO, valor_por_defecto, {valores_internos}, {Nombres_Mostrados})
+DEFINE_UI_PARAMS(channel_mode, Channel to View, DCTLUI_COMBO_BOX, 0, {MODE_RGB, MODE_RED, MODE_GREEN, MODE_BLUE, MODE_LUMA}, {Normal RGB, Red Channel, Green Channel, Blue Channel, Luma (B&W)})
+
+// =====================================================================
+// Main Function: Matemáticas básicas de color
+// =====================================================================
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    
+    // 1. EVALUAR SELECCIÓN DEL MENÚ
+    if (channel_mode == MODE_RGB) {
+        // Devuelve la imagen tal cual
+        return make_float3(p_R, p_G, p_B);
+    } 
+    else if (channel_mode == MODE_RED) {
+        // Muestra el canal rojo como una imagen en escala de grises
+        return make_float3(p_R, p_R, p_R);
+    } 
+    else if (channel_mode == MODE_GREEN) {
+        // Muestra el canal verde
+        return make_float3(p_G, p_G, p_G);
+    } 
+    else if (channel_mode == MODE_BLUE) {
+        // Muestra el canal azul (ideal para buscar ruido)
+        return make_float3(p_B, p_B, p_B);
+    } 
+    else if (channel_mode == MODE_LUMA) {
+        // Calcula la luminancia real (brillo en blanco y negro) estándar Rec.709
+        float luma = 0.2126f * p_R + 0.7152f * p_G + 0.0722f * p_B;
+        return make_float3(luma, luma, luma);
+    }
+
+    // Failsafe: si algo falla en la selección, devuelve la imagen normal
+    return make_float3(p_R, p_G, p_B);
+}

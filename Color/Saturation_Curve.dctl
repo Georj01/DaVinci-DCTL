@@ -1,0 +1,40 @@
+// =====================================================================
+// UI Parameters
+// =====================================================================
+DEFINE_UI_PARAMS(sat_amount, Saturation Boost, DCTLUI_SLIDER_FLOAT, 0.0, -1.0, 2.0, 0.05)
+DEFINE_UI_PARAMS(protect_luma, Protect Shadows/Highlights, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.1)
+
+// =====================================================================
+// Main Function: Color math only (No spatial sampling needed)
+// =====================================================================
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+
+    // 1. CALCULATE LUMINANCE (Rec.709 standard weights)
+    // We separate the brightness (Luma) from the actual color.
+    float luma = 0.2126f * p_R + 0.7152f * p_G + 0.0722f * p_B;
+
+    // 2. EXTRACT CHROMA VECTORS 
+    // By subtracting Luma from RGB, we get pure color difference.
+    float c_r = p_R - luma;
+    float c_g = p_G - luma;
+    float c_b = p_B - luma;
+
+    // 3. SATURATION CURVE (Luma Masking)
+    // We use a sine wave to create a smooth curve: 
+    // 0 at pure black (0.0), 1 at midtones (0.5), and 0 at pure white (1.0).
+    // This protects shadows from color noise and highlights from color clipping.
+    // Math: sin(luma * pi)
+    float luma_mask = sin(luma * 3.14159f);
+    
+    // Blend between a flat global boost and the protected curve based on UI slider
+    float effective_boost = sat_amount * ((1.0f - protect_luma) + (luma_mask * protect_luma));
+
+    // 4. APPLY BOOST AND RECOMBINE
+    // We take the original Luma and add the modified Chroma back.
+    float r_out = luma + c_r * (1.0f + effective_boost);
+    float g_out = luma + c_g * (1.0f + effective_boost);
+    float b_out = luma + c_b * (1.0f + effective_boost);
+
+    // 5. OUTPUT
+    return make_float3(r_out, g_out, b_out);
+}

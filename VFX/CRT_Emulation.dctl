@@ -1,0 +1,59 @@
+// =====================================================================
+// UI Parameters (Auto-generated in DaVinci Resolve)
+// =====================================================================
+DEFINE_UI_PARAMS(dist_amount, Distortion Curve, DCTLUI_SLIDER_FLOAT, 0.1, 0.0, 0.5, 0.01)
+DEFINE_UI_PARAMS(chroma_amount, Chromatic Aberration, DCTLUI_SLIDER_FLOAT, 0.005, 0.0, 0.05, 0.001)
+DEFINE_UI_PARAMS(scanline_intensity, Scanline Intensity, DCTLUI_SLIDER_FLOAT, 0.3, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(scanline_freq, Scanline Frequency, DCTLUI_SLIDER_INT, 800, 100, 2000, 10)
+
+// =====================================================================
+// Main Function: processes each pixel independently
+// =====================================================================
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB) {
+
+    // 1. SPATIAL NORMALIZATION
+    // Convert pixel coordinates (e.g., 1920x1080) to a -1.0 to +1.0 range
+    // The center of the screen is now (0,0)
+    float u = ((float)p_X / (float)(p_Width - 1)) * 2.0f - 1.0f;
+    float v = ((float)p_Y / (float)(p_Height - 1)) * 2.0f - 1.0f;
+
+    // 2. GEOMETRY: BARREL DISTORTION (CRT Curve)
+    // r2 is the squared radius from the center
+    float r2 = u * u + v * v;
+    // Distortion multiplier that increases towards the edges
+    float f = 1.0f + r2 * dist_amount;
+    
+    // Apply distortion to coordinates
+    float u_dist = u * f;
+    float v_dist = v * f;
+
+    // Denormalize back to 0.0 to 1.0 range to read the texture
+    float u_norm = u_dist * 0.5f + 0.5f;
+    float v_norm = v_dist * 0.5f + 0.5f;
+
+    // If distortion pushes the pixel off-screen, paint it black and stop calculating
+    if (u_norm < 0.0f || u_norm > 1.0f || v_norm < 0.0f || v_norm > 1.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    // 3. CHROMATIC ABERRATION
+    // Offset the channels on the X axis (like a delay or phase offset in audio)
+    // Make the offset larger at the edges by multiplying by 'f'
+    float u_r = u_norm - (chroma_amount * f); // Red shifts left
+    float u_g = u_norm;                       // Green stays intact
+    float u_b = u_norm + (chroma_amount * f); // Blue shifts right
+
+    // Read the pixels (Spatial sampling)
+    float r = _tex2D(p_TexR, u_r * p_Width, v_norm * p_Height);
+    float g = _tex2D(p_TexG, u_g * p_Width, v_norm * p_Height);
+    float b = _tex2D(p_TexB, u_b * p_Width, v_norm * p_Height);
+
+    // 4. SCANLINES (Old TV horizontal lines)
+    // This is literally an LFO (Sine wave) applied to the Y axis
+    float wave = sin(v_norm * 3.14159f * (float)scanline_freq);
+    // Adjust effect depth so it isn't completely black
+    float scanline_mod = 1.0f - scanline_intensity * (wave * 0.5f + 0.5f);
+
+    // 5. OUTPUT
+    return make_float3(r * scanline_mod, g * scanline_mod, b * scanline_mod);
+}
