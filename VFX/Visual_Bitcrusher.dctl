@@ -1,0 +1,28 @@
+// Visual_Bitcrusher.dctl
+// Pixelates the image and reduces color depth.
+
+DEFINE_UI_PARAMS(grid_size, Pixelation Amount, DCTLUI_SLIDER_FLOAT, 100.0, 1.0, 1000.0, 1.0)
+DEFINE_UI_PARAMS(color_depth, Color Depth, DCTLUI_SLIDER_FLOAT, 8.0, 2.0, 256.0, 1.0)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB)
+{
+    // Normalize spatial coordinates (u, v)
+    float u = (float)p_X / (float)(p_Width - 1);
+    float v = (float)p_Y / (float)(p_Height - 1);
+
+    // Apply pixelation: scale up, floor, and scale back down
+    u = _floor(u * grid_size) / grid_size;
+    v = _floor(v * grid_size) / grid_size;
+
+    // Sample the image using the new pixelated UV coordinates
+    float r = _tex2D(p_TexR, u, v);
+    float g = _tex2D(p_TexG, u, v);
+    float b = _tex2D(p_TexB, u, v);
+
+    // Apply posterization (reduce color depth) using the same logic
+    r = _floor(r * color_depth) / color_depth;
+    g = _floor(g * color_depth) / color_depth;
+    b = _floor(b * color_depth) / color_depth;
+
+    return make_float3(r, g, b);
+}

@@ -1,0 +1,34 @@
+// False_Color.dctl
+// Exposure analyzer mapping brightness to solid colors.
+
+DEFINE_UI_PARAMS(blend_amount, Blend Amount, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.01)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    // Calculate standard Rec.709 luminance
+    float luma = 0.2126f * p_R + 0.7152f * p_G + 0.0722f * p_B;
+    
+    float3 false_color;
+
+    // Map luminance to solid colors via thresholds
+    if (luma > 0.95f) {
+        false_color = make_float3(1.0f, 0.0f, 0.0f); // Pure Red for clipping highlights
+    } else if (luma > 0.75f) {
+        false_color = make_float3(1.0f, 1.0f, 0.0f); // Yellow for bright highlights
+    } else if (luma > 0.55f) {
+        false_color = make_float3(0.5f, 0.5f, 0.5f); // Gray for upper midtones
+    } else if (luma > 0.45f) {
+        false_color = make_float3(0.0f, 1.0f, 0.0f); // Green for middle gray / skin tones
+    } else if (luma > 0.05f) {
+        false_color = make_float3(0.0f, 0.5f, 0.5f); // Cyan for shadows
+    } else {
+        false_color = make_float3(0.0f, 0.0f, 1.0f); // Blue for crushed blacks
+    }
+
+    // Blend between the original image and the false color output
+    float r_out = (1.0f - blend_amount) * p_R + blend_amount * false_color.x;
+    float g_out = (1.0f - blend_amount) * p_G + blend_amount * false_color.y;
+    float b_out = (1.0f - blend_amount) * p_B + blend_amount * false_color.z;
+
+    return make_float3(r_out, g_out, b_out);
+}

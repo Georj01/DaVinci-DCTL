@@ -1,0 +1,67 @@
+// Safety_Grids.dctl
+// Draws UX/UI safe zones and compositional grids over the image.
+
+DEFINE_UI_PARAMS(grid_type, Grid Type, DCTLUI_COMBO_BOX, 0, { THIRDS, GOLDEN, SOCIAL }, { Rule of Thirds, Golden Ratio, Vertical Social Media })
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    float u = (float)p_X / (float)(p_Width - 1);
+    float v = (float)p_Y / (float)(p_Height - 1);
+
+    // Calculate line thickness (normalized) to be crisp (approx 1.5 pixels)
+    float dx = 1.5f / (float)p_Width;
+    float dy = 1.5f / (float)p_Height;
+
+    float grid = 0.0f;
+
+    if (grid_type == THIRDS) {
+        // Rule of Thirds (1/3 and 2/3)
+        grid += _step(0.3333f - dx, u) - _step(0.3333f + dx, u);
+        grid += _step(0.6666f - dx, u) - _step(0.6666f + dx, u);
+        grid += _step(0.3333f - dy, v) - _step(0.3333f + dy, v);
+        grid += _step(0.6666f - dy, v) - _step(0.6666f + dy, v);
+    } 
+    else if (grid_type == GOLDEN) {
+        // Golden Ratio (1 : 1.618 -> approx 0.382 and 0.618)
+        grid += _step(0.382f - dx, u) - _step(0.382f + dx, u);
+        grid += _step(0.618f - dx, u) - _step(0.618f + dx, u);
+        grid += _step(0.382f - dy, v) - _step(0.382f + dy, v);
+        grid += _step(0.618f - dy, v) - _step(0.618f + dy, v);
+    }
+    else if (grid_type == SOCIAL) {
+        // Vertical Social Media Safe Zones (TikTok / Reels)
+        float aspect = (float)p_Width / (float)p_Height;
+        
+        // Calculate 9:16 vertical crop bounds inside the current aspect ratio
+        float u_width = (9.0f / 16.0f) / aspect;
+        float u_margin = (1.0f - u_width) / 2.0f;
+        
+        // Main 9:16 vertical bounding lines
+        grid += _step(u_margin - dx, u) - _step(u_margin + dx, u);
+        grid += _step((1.0f - u_margin) - dx, u) - _step((1.0f - u_margin) + dx, u);
+        
+        // Common UI safe zones inside the 9:16 frame 
+        // Top 15% (Following/For You), Bottom 20% (Caption/Music), Right 15% (Buttons)
+        float top_safe = 0.15f;
+        float bottom_safe = 0.80f;
+        float right_safe = (1.0f - u_margin) - (0.15f * u_width);
+        
+        // Draw horizontal safe lines (branchless math)
+        float in_916 = _step(u_margin, u) - _step(1.0f - u_margin, u);
+        grid += in_916 * (_step(top_safe - dy, v) - _step(top_safe + dy, v));
+        grid += in_916 * (_step(bottom_safe - dy, v) - _step(bottom_safe + dy, v));
+        
+        // Vertical line for the right UI buttons
+        grid += _step(right_safe - dx, u) - _step(right_safe + dx, u);
+    }
+
+    // Clamp grid alpha to 1.0 to avoid glowing where lines intersect
+    grid = (grid > 1.0f) ? 1.0f : grid;
+
+    // Overlay pure white grid onto the original image
+    float r_out = (1.0f - grid) * p_R + grid;
+    float g_out = (1.0f - grid) * p_G + grid;
+    float b_out = (1.0f - grid) * p_B + grid;
+
+    return make_float3(r_out, g_out, b_out);
+}

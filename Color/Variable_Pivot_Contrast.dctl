@@ -1,0 +1,15 @@
+// Variable_Pivot_Contrast.dctl
+// Applies contrast with an adjustable pivot point.
+
+DEFINE_UI_PARAMS(contrast, Contrast Amount, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 3.0, 0.01)
+DEFINE_UI_PARAMS(pivot, Pivot Point, DCTLUI_SLIDER_FLOAT, 0.5, 0.0, 1.0, 0.01)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    // Apply contrast around the adjustable pivot point for each channel
+    float r_out = (p_R - pivot) * contrast + pivot;
+    float g_out = (p_G - pivot) * contrast + pivot;
+    float b_out = (p_B - pivot) * contrast + pivot;
+
+    return make_float3(r_out, g_out, b_out);
+}
