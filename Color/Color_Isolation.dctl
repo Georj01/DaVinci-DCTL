@@ -1,0 +1,59 @@
+// Color_Isolation.dctl
+// Keeps a target hue intact and desaturates the rest of the image (Sin City effect).
+
+DEFINE_UI_PARAMS(target_hue, Target Hue, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(tolerance, Tolerance, DCTLUI_SLIDER_FLOAT, 0.1, 0.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(desat_amount, Desat Amount, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.001)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B)
+{
+    // Convert RGB to HSV to extract Hue
+    float cmax = _fmaxf(p_R, _fmaxf(p_G, p_B));
+    float cmin = _fminf(p_R, _fminf(p_G, p_B));
+    float delta = cmax - cmin;
+    
+    float h = 0.0f;
+    if (delta > 0.0f)
+    {
+        if (cmax == p_R) {
+            h = _fmod((p_G - p_B) / delta, 6.0f);
+            if (h < 0.0f) h += 6.0f;
+        }
+        else if (cmax == p_G) {
+            h = (p_B - p_R) / delta + 2.0f;
+        }
+        else if (cmax == p_B) {
+            h = (p_R - p_G) / delta + 4.0f;
+        }
+        h /= 6.0f;
+    }
+    
+    // Calculate the absolute distance between pixel's hue and Target Hue
+    // Account for the circular nature of the hue wheel (wraparound at 1.0/0.0)
+    float dist = _fabs(h - target_hue);
+    if (dist > 0.5f) {
+        dist = 1.0f - dist;
+    }
+    
+    // Calculate Rec.709 luminance for the grayscale conversion
+    float luma = (p_R * 0.2126f) + (p_G * 0.7152f) + (p_B * 0.0722f);
+    
+    // Use a custom smoothstep function for a softer transition at the edges of the tolerance
+    // This avoids hard clipping for hues that are just on the boundary of our target
+    float edge0 = _fmaxf(0.0f, tolerance - 0.05f); // Start fading out slightly before tolerance limit
+    float edge1 = tolerance; // Fully desaturated by the time it reaches tolerance
+    
+    // Clamp x to [0, 1] for smoothstep calculation
+    float x = _fmaxf(0.0f, _fminf(1.0f, (dist - edge0) / (edge1 - edge0 + 1e-5f)));
+    // Standard cubic hermite interpolation
+    float mask = x * x * (3.0f - 2.0f * x);
+    
+    // Final blend based on our smooth mask and user desaturation amount
+    float blend = mask * desat_amount;
+    
+    float r_out = p_R * (1.0f - blend) + luma * blend;
+    float g_out = p_G * (1.0f - blend) + luma * blend;
+    float b_out = p_B * (1.0f - blend) + luma * blend;
+    
+    return make_float3(r_out, g_out, b_out);
+}

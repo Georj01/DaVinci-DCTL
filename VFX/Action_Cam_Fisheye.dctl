@@ -1,0 +1,45 @@
+// Action_Cam_Fisheye.dctl
+// Simulates an ultra-wide action camera lens distortion.
+
+DEFINE_UI_PARAMS(distortion, Distortion Amount, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 5.0, 0.01)
+DEFINE_UI_PARAMS(scale, Scale, DCTLUI_SLIDER_FLOAT, 1.0, 0.1, 3.0, 0.01)
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB)
+{
+    // Normalize spatial coordinates to [-1, 1] range centered at (0,0)
+    float u = ((float)p_X / (float)(p_Width - 1)) * 2.0f - 1.0f;
+    float v = ((float)p_Y / (float)(p_Height - 1)) * 2.0f - 1.0f;
+    
+    // Correct for aspect ratio to keep the distortion perfectly circular
+    float aspect = (float)p_Width / (float)p_Height;
+    u *= aspect;
+    
+    // Calculate radius from the center of the image
+    float radius = _hypotf(u, v);
+    
+    // Apply heavy spherical pinch distortion using the arc tangent (atan) function
+    float distorted_radius = radius;
+    if (distortion > 0.001f) {
+        distorted_radius = _atan2f(radius * distortion, 1.0f) / distortion;
+    }
+    
+    // Calculate new normalized coordinates using the distorted radius
+    float theta = _atan2f(v, u);
+    float new_u = distorted_radius * _cosf(theta);
+    float new_v = distorted_radius * _sinf(theta);
+    
+    // Revert aspect ratio correction and apply user scaling (to crop black edges)
+    new_u = (new_u / aspect) / scale;
+    new_v = new_v / scale;
+    
+    // Denormalize back to absolute pixel coordinates for texture sampling
+    float sample_x = (new_u * 0.5f + 0.5f) * (float)(p_Width - 1);
+    float sample_y = (new_v * 0.5f + 0.5f) * (float)(p_Height - 1);
+    
+    // Sample texture from the input image at the calculated distorted position
+    float r = _tex2D(p_TexR, sample_x, sample_y);
+    float g = _tex2D(p_TexG, sample_x, sample_y);
+    float b = _tex2D(p_TexB, sample_x, sample_y);
+    
+    return make_float3(r, g, b);
+}
