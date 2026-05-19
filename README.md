@@ -24,20 +24,23 @@ Once copied:
 
 ## 🛠️ Included Tools
 
-### /VFX: `CRT_Emulation.dctl`
-Cathode Ray Tube (CRT) monitor emulator. Processed in a single pass without heavy spatial loops, optimized to avoid overloading the GPU.
-*   **Distortion Curve:** Spherical barrel geometry.
-*   **Chromatic Aberration:** Red and Blue channel phase offset at the edges.
-*   **Scanlines:** LFO applied to the Y-axis with adjustable frequency and depth.
+### /Color
+*   **`Color_Isolation.dctl`**: Mathematical hue isolation (Sin City effect). Desaturates unselected hues without complex masking.
+*   **`Gradient_Map_Duotone.dctl`**: Direct pixel-level gradient mapping mapping luminance to a user-defined duotone spectrum.
+*   **`Saturation_Curve.dctl`**: Midtone-targeted saturation boosting via sine wave luminance masks to protect shadows and highlights.
+*   **`Variable_Pivot_Contrast.dctl`**: Pure contrast adjustment with an explicitly definable pivot point.
 
-### /Color: `Saturation_Curve.dctl`
-Advanced saturation control based on pure luminance isolation. Outperforms the standard program saturation slider.
-*   **Saturation Boost:** Chroma increase or decrease (using standard Rec.709 weights).
-*   **Protect Shadows/Highlights:** Uses a sine wave over the luminance to apply the effect only to midtones, protecting blacks from color noise and whites from clipping.
+### /Utility
+*   **`Channel_Splitter.dctl`**: Analytical tool to isolate specific image channels (R, G, B) or pure luminance.
+*   **`False_Color.dctl`**: Professional exposure analyzer mapping IRE luminance values to distinct structural color bands.
+*   **`Safety_Grids.dctl`**: Compositional overlay tool generating title-safe and action-safe aspect ratio grids.
 
-### /Utility: `Channel_Splitter.dctl`
-Analytical tool to isolate specific image channels using a native dropdown menu.
-*   Allows you to quickly view the Red, Green, or Blue channels (ideal for detecting digital camera noise) or pure luminance in grayscale.
+### /VFX
+*   **`Action_Cam_Fisheye.dctl`**: Extreme wide-angle barrel distortion mimicking sports camera optics.
+*   **`CMYK_Halftone.dctl`**: Mathematical printing press simulator generating anti-aliased CMYK dot matrices through UV coordinate rotation.
+*   **`CRT_Emulation.dctl`**: Single-pass CRT monitor emulator featuring barrel geometry, chromatic aberration, and scanlines.
+*   **`Radial_Chromatic_Aberration.dctl`**: Spatial RGB channel separation driven exponentially by the distance from the frame center.
+*   **`Visual_Bitcrusher.dctl`**: Retro digital degradation effect applying heavy color quantization and pixel-block decimation.
 
 ---
 

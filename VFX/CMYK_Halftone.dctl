@@ -1,0 +1,65 @@
+// CMYK Halftone Print Effect
+// Pure mathematical pixel manipulation for standard printing press simulation
+
+DEFINE_UI_PARAMS(dot_scale, Dot Scale, DCTLUI_SLIDER_FLOAT, 5.0, 0.1, 50.0, 0.1)
+DEFINE_UI_PARAMS(angle_c, Angle C, DCTLUI_SLIDER_FLOAT, 15.0, 0.0, 360.0, 1.0)
+DEFINE_UI_PARAMS(angle_m, Angle M, DCTLUI_SLIDER_FLOAT, 75.0, 0.0, 360.0, 1.0)
+DEFINE_UI_PARAMS(angle_y, Angle Y, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 360.0, 1.0)
+DEFINE_UI_PARAMS(angle_k, Angle K, DCTLUI_SLIDER_FLOAT, 45.0, 0.0, 360.0, 1.0)
+DEFINE_UI_PARAMS(blend, Blend, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.01)
+
+__DEVICE__ float get_halftone(float x, float y, float angle, float scale, float value) {
+    // Convert degrees to radians
+    float rad = angle * 3.1415926535f / 180.0f;
+    float s = _sinf(rad);
+    float c = _cosf(rad);
+    
+    // Rotate and scale UV coordinates. 
+    // Division by scale ensures larger scale values = larger dots.
+    float freq = 1.0f / _fmaxf(scale, 0.001f);
+    float rot_x = (x * c - y * s) * freq;
+    float rot_y = (x * s + y * c) * freq;
+    
+    // Generate Halftone Matrix (-1 to 1 sine wave math mapped to 0 to 1)
+    float pattern = (_sinf(rot_x) + _sinf(rot_y)) * 0.25f + 0.5f;
+    
+    // Soft threshold logic for anti-aliased dot rendering. 
+    // If color value > pattern, ink is applied (returns ~1.0).
+    return _clampf((value - pattern) * 10.0f + 0.5f, 0.0f, 1.0f);
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, float p_R, float p_G, float p_B) {
+    // 1. Defensively clamp inputs
+    float r = _clampf(p_R, 0.0f, 1.0f);
+    float g = _clampf(p_G, 0.0f, 1.0f);
+    float b = _clampf(p_B, 0.0f, 1.0f);
+
+    // 2. Convert RGB to CMYK
+    float k = 1.0f - _fmaxf(r, _fmaxf(g, b));
+    float k_inv = 1.0f - k;
+    
+    float c = (k_inv > 0.0001f) ? (1.0f - r - k) / k_inv : 0.0f;
+    float m = (k_inv > 0.0001f) ? (1.0f - g - k) / k_inv : 0.0f;
+    float y = (k_inv > 0.0001f) ? (1.0f - b - k) / k_inv : 0.0f;
+
+    // 3. Generate Halftone Screens
+    float px = (float)p_X;
+    float py = (float)p_Y;
+    
+    float dot_c = get_halftone(px, py, angle_c, dot_scale, c);
+    float dot_m = get_halftone(px, py, angle_m, dot_scale, m);
+    float dot_y = get_halftone(px, py, angle_y, dot_scale, y);
+    float dot_k = get_halftone(px, py, angle_k, dot_scale, k);
+
+    // 4. Convert CMYK Dots back to RGB (Subtractive Printing Logic)
+    float out_r = (1.0f - dot_c) * (1.0f - dot_k);
+    float out_g = (1.0f - dot_m) * (1.0f - dot_k);
+    float out_b = (1.0f - dot_y) * (1.0f - dot_k);
+
+    // 5. Apply Output Blend
+    return make_float3(
+        p_R * (1.0f - blend) + out_r * blend,
+        p_G * (1.0f - blend) + out_g * blend,
+        p_B * (1.0f - blend) + out_b * blend
+    );
+}

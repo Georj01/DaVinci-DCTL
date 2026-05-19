@@ -1,0 +1,51 @@
+// Radial Chromatic Aberration
+// Optimized spatial displacement prioritizing center sharpness
+
+DEFINE_UI_PARAMS(intensity, Distortion Intensity, DCTLUI_SLIDER_FLOAT, 0.05, 0.0, 1.0, 0.001)
+DEFINE_UI_PARAMS(falloff, Falloff Curve, DCTLUI_SLIDER_FLOAT, 2.0, 1.0, 5.0, 0.1)
+DEFINE_UI_PARAMS(fringe_bias, Color Fringe Bias, DCTLUI_COMBO_BOX, 0, { RB_SPLIT, GM_SPLIT }, { Red/Blue Split, Green/Magenta Split })
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB) {
+    
+    // 1. Convert pixel coordinates to normalized UV space [-0.5, 0.5]
+    // Defensive cast to prevent zero-division on 1px images (edge case)
+    float w = _fmaxf((float)p_Width - 1.0f, 1.0f);
+    float h = _fmaxf((float)p_Height - 1.0f, 1.0f);
+    
+    float cu = ((float)p_X / w) - 0.5f;
+    float cv = ((float)p_Y / h) - 0.5f;
+    
+    // 2. Aspect ratio correction for perfectly circular radial distortion
+    float aspect = w / h;
+    float dist = _sqrtf((cu * aspect) * (cu * aspect) + cv * cv);
+    
+    // 3. Calculate spatial offset factor
+    // Falloff uses a power curve based on distance from center. 
+    // dist * 2.0 maps the horizontal edges roughly to 1.0.
+    float factor = _powf(dist * 2.0f, _fmaxf(falloff, 1.0f)) * intensity;
+    
+    // 4. Calculate absolute pixel shifts
+    // The shift magnitude grows radially outward from the center
+    float shift_x = cu * factor * w;
+    float shift_y = cv * factor * h;
+    
+    float px = (float)p_X;
+    float py = (float)p_Y;
+    
+    float r, g, b;
+
+    // 5. Apply spatial offsets with minimum required texture samples
+    if (fringe_bias == 0) {
+        // Red/Blue Split: Red pushes outward, Blue pulls inward, Green is pristine
+        r = _tex2D(p_TexR, px + shift_x, py + shift_y);
+        g = _tex2D(p_TexG, px, py);
+        b = _tex2D(p_TexB, px - shift_x, py - shift_y);
+    } else {
+        // Green/Magenta Split: Green pushes outward, Red+Blue (Magenta) pull inward
+        r = _tex2D(p_TexR, px - shift_x, py - shift_y);
+        g = _tex2D(p_TexG, px + shift_x, py + shift_y);
+        b = _tex2D(p_TexB, px - shift_x, py - shift_y);
+    }
+
+    return make_float3(r, g, b);
+}
