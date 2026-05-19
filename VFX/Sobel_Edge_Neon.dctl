@@ -1,0 +1,76 @@
+DEFINE_UI_PARAMS(edge_sensitivity, Edge Sensitivity, DCTLUI_SLIDER_FLOAT, 2.0, 0.0, 10.0, 0.1)
+DEFINE_UI_PARAMS(neon_r, Neon Tint R, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(neon_g, Neon Tint G, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(neon_b, Neon Tint B, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(bg_blend, Background Blend, DCTLUI_SLIDER_FLOAT, 0.0, 0.0, 1.0, 0.01)
+
+__DEVICE__ float get_luma(float3 color) {
+    return 0.2126f * color.x + 0.7152f * color.y + 0.0722f * color.z;
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB)
+{
+    // Center sample (used for background blending)
+    float3 mc = make_float3(_tex2D(p_TexR, p_X, p_Y), _tex2D(p_TexG, p_X, p_Y), _tex2D(p_TexB, p_X, p_Y));
+
+    // Hardcode 8 neighbor texture fetches to bypass looping and array indexing
+    // Top Row
+    float3 tl = make_float3(_tex2D(p_TexR, p_X - 1, p_Y - 1), _tex2D(p_TexG, p_X - 1, p_Y - 1), _tex2D(p_TexB, p_X - 1, p_Y - 1));
+    float3 tc = make_float3(_tex2D(p_TexR, p_X,     p_Y - 1), _tex2D(p_TexG, p_X,     p_Y - 1), _tex2D(p_TexB, p_X,     p_Y - 1));
+    float3 tr = make_float3(_tex2D(p_TexR, p_X + 1, p_Y - 1), _tex2D(p_TexG, p_X + 1, p_Y - 1), _tex2D(p_TexB, p_X + 1, p_Y - 1));
+    
+    // Middle Row (excluding center, already fetched)
+    float3 ml = make_float3(_tex2D(p_TexR, p_X - 1, p_Y),     _tex2D(p_TexG, p_X - 1, p_Y),     _tex2D(p_TexB, p_X - 1, p_Y));
+    float3 mr = make_float3(_tex2D(p_TexR, p_X + 1, p_Y),     _tex2D(p_TexG, p_X + 1, p_Y),     _tex2D(p_TexB, p_X + 1, p_Y));
+    
+    // Bottom Row
+    float3 bl = make_float3(_tex2D(p_TexR, p_X - 1, p_Y + 1), _tex2D(p_TexG, p_X - 1, p_Y + 1), _tex2D(p_TexB, p_X - 1, p_Y + 1));
+    float3 bc = make_float3(_tex2D(p_TexR, p_X,     p_Y + 1), _tex2D(p_TexG, p_X,     p_Y + 1), _tex2D(p_TexB, p_X,     p_Y + 1));
+    float3 br = make_float3(_tex2D(p_TexR, p_X + 1, p_Y + 1), _tex2D(p_TexG, p_X + 1, p_Y + 1), _tex2D(p_TexB, p_X + 1, p_Y + 1));
+
+    // Convert neighbors to Luma for gradient calculation
+    float l_tl = get_luma(tl);
+    float l_tc = get_luma(tc);
+    float l_tr = get_luma(tr);
+    float l_ml = get_luma(ml);
+    float l_mr = get_luma(mr);
+    float l_bl = get_luma(bl);
+    float l_bc = get_luma(bc);
+    float l_br = get_luma(br);
+
+    // Sobel Gx (Horizontal Derivative)
+    // [ -1   0   1 ]
+    // [ -2   0   2 ]
+    // [ -1   0   1 ]
+    float gx = (-1.0f * l_tl) + (-2.0f * l_ml) + (-1.0f * l_bl) + 
+               ( 1.0f * l_tr) + ( 2.0f * l_mr) + ( 1.0f * l_br);
+    
+    // Sobel Gy (Vertical Derivative)
+    // [ -1  -2  -1 ]
+    // [  0   0   0 ]
+    // [  1   2   1 ]
+    float gy = (-1.0f * l_tl) + (-2.0f * l_tc) + (-1.0f * l_tr) + 
+               ( 1.0f * l_bl) + ( 2.0f * l_bc) + ( 1.0f * l_br);
+
+    // Calculate edge magnitude using Pythagorean theorem
+    float magnitude = _sqrtf((gx * gx) + (gy * gy)) * edge_sensitivity;
+    
+    // Clamp magnitude to avoid exceeding signal limits
+    magnitude = _fminf(1.0f, magnitude);
+
+    // Map intensity to the selected Neon RGB tint
+    float3 neon_edges = make_float3(
+        neon_r * magnitude, 
+        neon_g * magnitude, 
+        neon_b * magnitude
+    );
+    
+    // Additive Blend: Output = Background * (Blend Ratio) + Neon Edges
+    float3 out = make_float3(
+        (mc.x * bg_blend) + neon_edges.x,
+        (mc.y * bg_blend) + neon_edges.y,
+        (mc.z * bg_blend) + neon_edges.z
+    );
+
+    return out;
+}

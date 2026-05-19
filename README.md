@@ -26,6 +26,7 @@ Once copied:
 
 ### /Color
 *   **`Color_Isolation.dctl`**: Mathematical hue isolation (Sin City effect). Desaturates unselected hues without complex masking.
+*   **`Film_Halation.dctl`**: Simulates analog film halation by isolating high-luminance areas and applying a highly optimized spatial blur with a red/orange color bias.
 *   **`Gradient_Map_Duotone.dctl`**: Direct pixel-level gradient mapping mapping luminance to a user-defined duotone spectrum.
 *   **`Saturation_Curve.dctl`**: Midtone-targeted saturation boosting via sine wave luminance masks to protect shadows and highlights.
 *   **`Variable_Pivot_Contrast.dctl`**: Pure contrast adjustment with an explicitly definable pivot point.
@@ -40,6 +41,7 @@ Once copied:
 *   **`CMYK_Halftone.dctl`**: Mathematical printing press simulator generating anti-aliased CMYK dot matrices through UV coordinate rotation.
 *   **`CRT_Emulation.dctl`**: Single-pass CRT monitor emulator featuring barrel geometry, chromatic aberration, and scanlines.
 *   **`Radial_Chromatic_Aberration.dctl`**: Spatial RGB channel separation driven exponentially by the distance from the frame center.
+*   **`Sobel_Edge_Neon.dctl`**: High-performance spatial edge detection utilizing an optimized 3x3 Sobel matrix with neon color mapping.
 *   **`Visual_Bitcrusher.dctl`**: Retro digital degradation effect applying heavy color quantization and pixel-block decimation.
 
 ---

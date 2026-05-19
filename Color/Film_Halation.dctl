@@ -1,0 +1,64 @@
+DEFINE_UI_PARAMS(luma_threshold, Luma Threshold, DCTLUI_SLIDER_FLOAT, 0.8, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(halation_spread, Halation Spread, DCTLUI_SLIDER_FLOAT, 2.0, 0.0, 10.0, 1.0)
+DEFINE_UI_PARAMS(red_bias, Red/Orange Bias, DCTLUI_SLIDER_FLOAT, 0.8, 0.0, 1.0, 0.01)
+DEFINE_UI_PARAMS(overall_blend, Overall Blend, DCTLUI_SLIDER_FLOAT, 1.0, 0.0, 2.0, 0.01)
+
+__DEVICE__ float3 get_highlight(int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB, float threshold) {
+    float3 sample = make_float3(_tex2D(p_TexR, p_X, p_Y), _tex2D(p_TexG, p_X, p_Y), _tex2D(p_TexB, p_X, p_Y));
+    float luma = 0.2126f * sample.x + 0.7152f * sample.y + 0.0722f * sample.z;
+    // Extract highlight by subtracting threshold; clamp to 0.0 to prevent darkening
+    float mask = _fmaxf(0.0f, luma - threshold);
+    return make_float3(sample.x * mask, sample.y * mask, sample.z * mask);
+}
+
+__DEVICE__ float3 transform(int p_Width, int p_Height, int p_X, int p_Y, __TEXTURE__ p_TexR, __TEXTURE__ p_TexG, __TEXTURE__ p_TexB)
+{
+    float3 original = make_float3(
+        _tex2D(p_TexR, p_X, p_Y),
+        _tex2D(p_TexG, p_X, p_Y),
+        _tex2D(p_TexB, p_X, p_Y)
+    );
+
+    int s = (int)halation_spread;
+    
+    // 9-Tap Spatial Blur (Center + 8 Neighbors)
+    // Weights for 3x3 Gaussian approx: Center 0.25, Edges 0.125, Corners 0.0625
+    float3 h_center = get_highlight(p_X, p_Y, p_TexR, p_TexG, p_TexB, luma_threshold);
+    
+    float3 h_top    = get_highlight(p_X, p_Y - s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_bottom = get_highlight(p_X, p_Y + s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_left   = get_highlight(p_X - s, p_Y, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_right  = get_highlight(p_X + s, p_Y, p_TexR, p_TexG, p_TexB, luma_threshold);
+    
+    float3 h_tl     = get_highlight(p_X - s, p_Y - s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_tr     = get_highlight(p_X + s, p_Y - s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_bl     = get_highlight(p_X - s, p_Y + s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    float3 h_br     = get_highlight(p_X + s, p_Y + s, p_TexR, p_TexG, p_TexB, luma_threshold);
+    
+    float3 blur = make_float3(
+        h_center.x * 0.25f + (h_top.x + h_bottom.x + h_left.x + h_right.x) * 0.125f + (h_tl.x + h_tr.x + h_bl.x + h_br.x) * 0.0625f,
+        h_center.y * 0.25f + (h_top.y + h_bottom.y + h_left.y + h_right.y) * 0.125f + (h_tl.y + h_tr.y + h_bl.y + h_br.y) * 0.0625f,
+        h_center.z * 0.25f + (h_top.z + h_bottom.z + h_left.z + h_right.z) * 0.125f + (h_tl.z + h_tr.z + h_bl.z + h_br.z) * 0.0625f
+    );
+    
+    // Tinting (Red/Orange Bias)
+    // bias = 0.0 -> Multiplier (1.0, 1.0, 1.0) -> Neutral white halation
+    // bias = 1.0 -> Multiplier (1.0, 0.4, 0.0) -> Deep red/orange halation
+    float g_tint = 1.0f - (0.6f * red_bias);
+    float b_tint = 1.0f - (1.0f * red_bias);
+    
+    float3 tinted_blur = make_float3(
+        blur.x * 1.0f,
+        blur.y * g_tint,
+        blur.z * b_tint
+    );
+    
+    // Additive Blend
+    float3 out = make_float3(
+        original.x + (tinted_blur.x * overall_blend),
+        original.y + (tinted_blur.y * overall_blend),
+        original.z + (tinted_blur.z * overall_blend)
+    );
+    
+    return out;
+}
